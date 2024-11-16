@@ -122,4 +122,18 @@ def schedule_slots(email_addresses: list[str], start_datetime: str, end_datetime
         "end_datetime": end_datetime,
         "meeting_duration": meeting_duration,
         "suggested_slots": response.suggested_slots
-   
+    }
+
+def main():
+    result = schedule_slots(
+        ["sfigueira@scu.edu", "swu12@scu.edu"],
+        "2024-11-14 09:00:00",
+        "2024-11-15 20:00:00",
+        45
+    )
+    print("Suggested slots:", result["suggested_slots"])
+    print("Returned elements", result)
+
+if __name__ == "__main__":
+    main()
+
