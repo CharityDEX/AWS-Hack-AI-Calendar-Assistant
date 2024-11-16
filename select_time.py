@@ -101,7 +101,7 @@ def schedule_slots(email_addresses: list[str], start_datetime: str, end_datetime
     email_service = build('gmail', 'v1', credentials=creds)
     
     class CalendarResponse(BaseModel):
-        suggested_slots: List[List[str]] = Field(description="List of available time slots in format [start_date, start_time, end_date, end_time]")
+        suggested_slots: List[List[str]] = Field(description="List of available time slots in format [date, start_time, end_time]")
 
     llm = ChatBedrock(
         model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
@@ -114,7 +114,7 @@ def schedule_slots(email_addresses: list[str], start_datetime: str, end_datetime
 
     available_slots = get_availability_slots(email_addresses, start_datetime, end_datetime, meeting_duration)
     # print(slots)
-    response = llm.invoke(f"You are a calendar scheduling assistant. Please suggest at most 6 possible time slots and return them as a list of lists containing start - end date time pairs with format start_date, start_time, end_date, end_time [{date_format},{time_format},{date_format},{time_format}]. Return the lists and nothing else. Keep in mind the context is a university environment and keep meetings between 8am - 8pm. Suggest the most reasonable and convenient time slots to schedule meetings. Here are the available time slots for a {meeting_duration}-minute meeting: {available_slots}. ")
+    response = llm.invoke(f"You are a calendar scheduling assistant. Please suggest at most 6 possible time slots and return them as a list of lists containing start - end date time pairs with format date, start_time, end_date [{date_format},{time_format},{time_format}]. Return the lists and nothing else. Keep in mind the context is a university environment and keep meetings between 8am - 8pm. Suggest the most reasonable and convenient time slots to schedule meetings. Here are the available time slots for a {meeting_duration}-minute meeting: {available_slots}. ")
     
     return {
         "email_addresses": email_addresses,
@@ -133,6 +133,10 @@ def main():
     )
     print("Suggested slots:", result["suggested_slots"])
     print("Returned elements", result)
+    
+    """
+    Returned elements {'email_addresses': ['sfigueira@scu.edu', 'swu12@scu.edu'], 'start_datetime': '2024-11-14 09:00:00', 'end_datetime': '2024-11-15 20:00:00', 'meeting_duration': 45, 'suggested_slots': [['2024-11-14', '09:00:00', '09:45:00'], ['2024-11-14', '09:15:00', '10:00:00'], ['2024-11-15', '18:00:00', '18:45:00']]}
+    """
 
 if __name__ == "__main__":
     main()
