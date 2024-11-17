@@ -12,7 +12,6 @@ from google.oauth2.credentials import Credentials
 from typing import Annotated
 from langchain_openai import ChatOpenAI
 from typing_extensions import TypedDict
-from langchain_qdrant import QdrantVectorStore
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage, SystemMessage
