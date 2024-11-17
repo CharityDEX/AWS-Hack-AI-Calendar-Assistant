@@ -45,7 +45,7 @@ const MeetingScheduler = () => {
     
     try {
       const response = await sendData(dataToSendBackend);
-      dispatch(sendSuggestedTimes(response.data.suggested_slots));
+      dispatch(sendSuggestedTimes(response.suggested_slots));
       console.log('Server Response:', response);
     } catch (error) {
       console.log('Error sending data:', error);
