@@ -39,6 +39,7 @@ const MeetingScheduler = () => {
       endDateTime: `${endDate} ${endTime}`,
       duration,
       description,
+      title
     };
     
     try {
