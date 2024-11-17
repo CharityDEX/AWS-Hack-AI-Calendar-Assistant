@@ -143,6 +143,7 @@ def get_availability_slots(s):
     meeting_interval_start_date = s["meeting_interval_start_date"]
     meeting_interval_end_date = s["meeting_interval_end_date"]
     participant_emails = s["participant_emails"]
+    participant_emails += s["organizer_email"]
     meeting_duration_minutes = s["meeting_duration_minutes"]
 
     client_id = os.environ["GOOGLE_CLIENT_ID"]
