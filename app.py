@@ -11,11 +11,17 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from gradio import ChatMessage
 from google.oauth2.credentials import Credentials
-from email_graph import create_email_graph
+from email_graph import create_email_graph, utc_to_pst, pst_to_utc
 import gradio as gr
 import os
+from googleapiclient.discovery import build
+from datetime import datetime, timedelta, timezone
+from langchain_openai import ChatOpenAI
+
 load_dotenv()
 
+format_string = "%Y-%m-%d %H:%M:%S"
+time_selector_llm = ChatOpenAI(temperature=0)
 app = FastAPI()
 email_graph = create_email_graph()
 
@@ -167,7 +173,79 @@ async def ask_question(question, history: list, gr_state):
 # output: start the email async task
 #def start_emailing_graph():
 
+def dates_to_strings(dates):
+    string_tuples = []
+    for slot_start, slot_end in dates:
+        string_tuples.append((slot_start.strftime(format_string), slot_end.strftime(format_string)))
+        
+    return string_tuples
+
+def get_availability_slots(s):
     
+    meeting_interval_start_date = s["meeting_interval_start_date"]
+    meeting_interval_end_date = s["meeting_interval_end_date"]
+    participant_emails = s["participant_emails"]
+    meeting_duration_minutes = s["meeting_duration"]
+
+    client_id = os.environ["GOOGLE_CLIENT_ID"]
+    client_secret = os.environ["GOOGLE_CLIENT_SECRET"]
+    creds = Credentials(token=s["access_token"], refresh_token=s["refresh_token"], client_id=client_id, client_secret=client_secret)
+    calendar_service = build('calendar', 'v3', credentials=creds)
+
+    start_date = datetime.strptime(meeting_interval_start_date, format_string)
+    end_date = datetime.strptime(meeting_interval_end_date, format_string)
+
+    start_date = pst_to_utc(start_date)
+    end_date = pst_to_utc(end_date)
+
+    body = {
+        "timeMin": start_date.isoformat() + "Z",
+        "timeMax": end_date.isoformat() + "Z",
+        "items": [{"id": email} for email in participant_emails]
+    }
+    freebusy_result = calendar_service.freebusy().query(body=body).execute()
+
+    all_busy_periods = []
+    for calendar in freebusy_result['calendars'].values():
+        for busy_period in calendar.get('busy', []):
+            busy_start = datetime.fromisoformat(busy_period['start'][:-1])
+            busy_end = datetime.fromisoformat(busy_period['end'][:-1])
+            all_busy_periods.append((busy_start, busy_end))
+
+    all_busy_periods.sort()
+    merged_busy_periods = []
+    for busy_start, busy_end in all_busy_periods:
+        if not merged_busy_periods or merged_busy_periods[-1][1] < busy_start:
+            merged_busy_periods.append((busy_start, busy_end))
+        else:
+            merged_busy_periods[-1] = (merged_busy_periods[-1][0], max(merged_busy_periods[-1][1], busy_end))
+
+    available_slots = []
+    current_start = start_date
+    for busy_start, busy_end in merged_busy_periods:
+        if busy_start - current_start >= timedelta(minutes=meeting_duration_minutes):
+            available_slots.append((utc_to_pst(current_start), utc_to_pst(busy_start)))
+        current_start = busy_end
+
+    if end_date - current_start >= timedelta(minutes=meeting_duration_minutes):
+        available_slots.append((utc_to_pst(current_start), utc_to_pst(end_date)))
+
+    return dates_to_strings(available_slots)
+
+def select_best_slot(duration, slots):
+    selector_prompt = f'''
+        You are a specialized agent made to select meeting time slots. You will be provided
+        by a list of times showing intervals when meeting participants are all available, each of which is a tuple of datetime strings (one for start of interval, one for end).
+        Out of these, please select 1 time slot {duration} minutes long that would be most convenient for a work meeting. Prefer a time
+        slot that is not too late at night or too early in the morning, and avoid weekends if you can (for context it is 2024 right now).
+        Please output a just a string as your answer, it being the selected time slot start
+        datetime (in the format {format_string}). Please remember that your selected time slot must fit
+        into the provided ones, must be of duration {duration} minutes, and must be properly output in the format {format_string}.
+        Provided time slots (in tuples, start and end): {slots}
+        Your selected most convenient time slot:
+    '''
+    response = time_selector_llm.invoke(selector_prompt)
+    return response.content
 
 with gr.Blocks() as login_page:
     btn = gr.Button("Login")
