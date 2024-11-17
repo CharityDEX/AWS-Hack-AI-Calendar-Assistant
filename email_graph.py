@@ -45,7 +45,7 @@ from googleapiclient.errors import HttpError
 
 format_string = "%Y-%m-%d %H:%M:%S"
 
-'''
+
 email_llm = ChatBedrock(
     model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
     model_kwargs=dict(temperature=0),
@@ -55,7 +55,7 @@ email_llm = ChatBedrock(
     beta_use_converse_api=True
     # other params...
 )
-
+'''
 classifier_llm = ChatBedrock(
     model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
     model_kwargs=dict(temperature=0),
@@ -69,7 +69,7 @@ classifier_llm = ChatBedrock(
 class ConfirmationFormat(BaseModel):
    classification: int = Field(description="Classification of the email: 0 for confirmation, 1 for denial, 2 for unrelated")
 
-email_llm = ChatOpenAI(temperature=0)
+#email_llm = ChatOpenAI(temperature=0)
 classifier_llm = ChatOpenAI(temperature=0).with_structured_output(ConfirmationFormat)
 extractor_llm = ChatOpenAI(temperature=0)
 
