@@ -4,6 +4,8 @@ import { useDispatch } from 'react-redux';
 import { scheduleMeeting } from '../redux/slices/meetingsSlice.js';
 import { openOptions } from '../redux/slices/optionsSlice.js';
 
+import sendData from '../api/sendData.js';
+
 const MeetingScheduler = () => {
   const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -17,7 +19,7 @@ const MeetingScheduler = () => {
   
   const dispatch = useDispatch();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newMeeting = {
       id: Date.now(),
@@ -26,10 +28,26 @@ const MeetingScheduler = () => {
       participants,
       description,
       status: 'Pending',
-      confirmedParticipants: [],
+      confirmedParticipants: [],      
     }
     dispatch(scheduleMeeting(newMeeting));
     dispatch(openOptions());
+
+    const dataToSendBackend = {
+      participants,
+      startDateTime: `${startDate} ${startTime}`,
+      endDateTime: `${endDate} ${endTime}`,
+      duration,
+      description,
+    };
+    
+    try {
+      const response = await sendData(dataToSendBackend);
+      console.log('Server Response:', response);
+    } catch (error) {
+      console.log('Error sending data:', error);
+    }
+
   }
   
   const addParticipant = (e) => {
