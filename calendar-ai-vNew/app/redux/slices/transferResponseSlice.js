@@ -3,14 +3,18 @@ import { createSlice } from '@reduxjs/toolkit';
 export const transferResponseSlice = createSlice({
   name: 'transsferResponse',
   initialState: {
-    response: []
+    response: [],
+    oldData: {}
   },
   reducers: {
     sendSuggestedTimes: (state, action) => {
       state.response = action.payload;
+    },
+    storeOldData: (state, action) => {
+      state.oldData = action.payload;
     }
   }
 })
 
-export const { sendSuggestedTimes } = transferResponseSlice.actions;
+export const { sendSuggestedTimes, storeOldData } = transferResponseSlice.actions;
 export default transferResponseSlice.reducer;

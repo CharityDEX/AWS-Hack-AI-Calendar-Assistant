@@ -3,7 +3,7 @@ import { useDispatch } from 'react-redux';
 
 import { scheduleMeeting } from '../redux/slices/meetingsSlice.js';
 import { openOptions } from '../redux/slices/optionsSlice.js';
-import { sendSuggestedTimes } from '../redux/slices/transferResponseSlice.js';
+import { sendSuggestedTimes, storeOldData } from '../redux/slices/transferResponseSlice.js';
 
 import sendData from '../api/sendData.js';
 
@@ -45,6 +45,7 @@ const MeetingScheduler = () => {
     
     try {
       const response = await sendData(dataToSendBackend);
+      dispatch(storeOldData(dataToSendBackend));
       dispatch(sendSuggestedTimes(response.suggested_slots));
       console.log('Server Response:', response);
     } catch (error) {
