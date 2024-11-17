@@ -14,7 +14,7 @@ const MeetingStatus = () => {
 
       <div className='meeting-status-container'>
         <h4>Meeting Title: {meeting.title}</h4>
-        <p>Date: {meeting.startDate}</p>
+        <p>Date: {meeting.date}</p>
         <p>Time: {meeting.startTime} - {meeting.endTime}</p>
         <p>Duration: {meeting.duration} minutes</p>
         <p>Status: {meeting.status}</p>

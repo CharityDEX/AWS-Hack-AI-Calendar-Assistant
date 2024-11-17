@@ -1,3 +1,4 @@
+import { changeLoadStatus } from '../redux/slices/loadStatusSlice.js';
 import { addDateTime } from '../redux/slices/meetingsSlice.js';
 import { useDispatch } from 'react-redux';
 
@@ -14,6 +15,7 @@ const ChoiceRender = (props) => {
   const handleClick = () => {
     console.log(dataToDispatch);
     dispatch(addDateTime(dataToDispatch));
+    dispatch(changeLoadStatus());
   }
 
   console.log(date);

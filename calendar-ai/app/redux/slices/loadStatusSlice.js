@@ -6,11 +6,11 @@ export const loadStatusSlice = createSlice({
     load: false
   },
   reducers: {
-    loadStatus: (state) => {
+    changeLoadStatus: (state) => {
       state.load = true;
     },
   },
 })
 
-export const { loadStatus } = loadStatusSlice.actions;
+export const { changeLoadStatus } = loadStatusSlice.actions;
 export default loadStatusSlice.reducer;

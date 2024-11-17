@@ -4,12 +4,8 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 import ChoiceRender from './ChoiceRender';
 
-import MeetingStatus from './MeetingStatus';
-
-
 const MeetingChoices = () => {
   const optionsOpen = useSelector((state) => state.options.isOpen);
-  const statusOpen = useSelector(state => state.loadStatus.load);
 
   const times = {
     option1: ['11/20/2004', '5:00', '6:00'],
@@ -34,7 +30,6 @@ const MeetingChoices = () => {
           />
         ))}
       </div>
-      {statusOpen ? <MeetingStatus /> : ''}
     </div>
   );
 };
