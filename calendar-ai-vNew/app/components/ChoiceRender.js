@@ -9,14 +9,13 @@ const ChoiceRender = (props) => {
   const {date, startTime, endTime} = props.data;
   const oldData = useSelector(state => state.transferResponse.oldData);
 
-  const dataToDispatch = {
+  let dataToDispatch = {
     "date": date,
     "startTime": startTime,
     "endTime": endTime
   }
 
   const handleClick = async () => {
-    console.log(dataToDispatch);
     dispatch(addDateTime(dataToDispatch));
     dispatch(changeLoadStatus());
 
@@ -24,6 +23,7 @@ const ChoiceRender = (props) => {
       ...dataToDispatch,
       ...oldData,
     }
+    console.log(dataToDispatch);
 
     try {
       const response = await sendResponse(dataToDispatch);
