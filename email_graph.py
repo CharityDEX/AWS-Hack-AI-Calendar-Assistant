@@ -93,7 +93,8 @@ class GraphState(TypedDict):
 
 def get_now_string():
     now = utc_to_pst(datetime.now(timezone.utc))
-    now_string = now.strftime("%Y-%m-%d %H:%M:%S")
+    now = now - timedelta(minutes=2)
+    now_string = now.strftime(format_string)
     return now_string
 
 def pst_to_utc(pst_datetime):
@@ -130,12 +131,13 @@ def send_emails(state: GraphState):
 
     react_graph = create_react_agent(model=email_llm, tools=[send_tool])
 
-    emails = state["participant_info"].keys()
+    emails = state["participant_info"].keys() #TODO list() ?
     org_name = state["organizer_name"]
     duration = state["meeting_duration_minutes"]
     slot_start = state["meeting_slot_start"]
     slot_end = state["meeting_slot_end"]
     meeting_description = state["meeting_description"]
+    meeting_title = state["meeting_title"]
 
     print("\n\nEMAILS:\n\n" + str(emails))
 
@@ -145,7 +147,9 @@ def send_emails(state: GraphState):
         The meeting will start during this time and date: {slot_start} and will last until: {slot_end}.
         Here is the list of emails: {str(emails)} make sure to send each one individually and personalize it!
         Your name is {org_name}. This is the meeting description (use as reference): {meeting_description}.
-        REFER TO THE RECIPIENTS ONLY BY THEIR EMAIL! DO NOT POST THEIR NAMES! Example: Hello abc@email.com, ... 
+        The meeting is called {meeting_title}, put this in the subject line of the emails.
+        REFER TO THE RECIPIENTS ONLY BY THEIR EMAIL! DO NOT USE THEIR NAMES! Example: Hello abc@email.com, ... 
+        If there is only one recipient, please send only one email; DO NOT SEND MULTIPLE EMAILS TO THE SAME PARTICIPANT!
     '''
     print("\nSENDING EMAILS:\n")
     graph_input = {"messages": [("user", send_email_prompt)]}
@@ -318,7 +322,7 @@ def on_task_done(task):
     #print(f"EMAIL in function on_task: {state["email"]}")
     #bot.rag_graph.update_state(config=config, values={"is_bgtask_running": False})
     #print(f"Callback: Task finished with result: {background_task.result()}")
-    print("\nprocess ended " + str(state["access_token"]))
+    print("\nprocess ended ")
 
 def create_event(state):
     client_id = os.environ["GOOGLE_CLIENT_ID"]
@@ -328,9 +332,12 @@ def create_event(state):
 
     start_time = datetime.strptime(state["meeting_slot_start"], format_string)
     end_time = datetime.strptime(state["meeting_slot_end"], format_string)
-    emails = state["participant_info"].keys()
-    emails += state["organizer_email"]
+    emails = list(state["participant_info"].keys())
+    print("\nEMAILS: " + str(emails) + "\n")
+    emails.append(state["organizer_email"])
     attendees = [{'email': email} for email in emails]
+
+    print("\nATTENDEES: " + str(attendees) + "\n")
 
     # create event
     event = {
@@ -361,6 +368,8 @@ def on_user_deny(localstate, subject, body):
     #time_slots = extract_blocking_slots(subject, body, localstate["meeting_slot_start"], localstate["meeting_slot_end"])
 
     print("user denied, ending")
+    # TODO maybe write email to organizer saying denied?
+
 
     # DENIAL PLAN:
     # 1. extract blocking slots from the denial email with llm
