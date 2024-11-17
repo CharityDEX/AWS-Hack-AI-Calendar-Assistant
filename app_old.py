@@ -11,20 +11,19 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from gradio import ChatMessage
 from google.oauth2.credentials import Credentials
-from email_graph import create_email_graph
+from email_graph import create_email_graph, utc_to_pst, pst_to_utc
 import gradio as gr
 import os
-from langchain_openai import ChatOpenAI
-from email_graph import pst_to_utc, utc_to_pst
-from datetime import datetime, timedelta
 from googleapiclient.discovery import build
+from datetime import datetime, timedelta, timezone
+from langchain_openai import ChatOpenAI
 
 load_dotenv()
 
+format_string = "%Y-%m-%d %H:%M:%S"
+time_selector_llm = ChatOpenAI(temperature=0)
 app = FastAPI()
 email_graph = create_email_graph()
-time_selector_llm = ChatOpenAI(temperature=0)
-format_string = "%Y-%m-%d %H:%M:%S"
 
 # OAuth settings
 GOOGLE_CLIENT_ID = os.environ["GOOGLE_CLIENT_ID"]
@@ -74,7 +73,7 @@ async def logout(request: Request):
 async def login(request: Request):
     root_url = gr.route_utils.get_root_url(request, "/login", None)
     # Where Google will redirect after login. IMPORTANT!!! should be the same as the one registered in Google Cloud Console Add Authorized redirect URIs
-    redirect_uri = "http://ec2-35-93-150-248.us-west-2.compute.amazonaws.com/auth" #f"{root_url}/auth" 
+    redirect_uri = f"{root_url}/auth" 
     #print("Redirecting to", redirect_uri)
     return await oauth.google.authorize_redirect(request, redirect_uri, access_type="offline")
 
@@ -89,47 +88,90 @@ async def auth(request: Request):
     
     request.session['user'] = dict(token_data)["userinfo"]
     request.session['access_token'] = dict(token_data)["access_token"]
-    request.session['refresh_token'] = ""#dict(token_data)["refresh_token"]
+    request.session['refresh_token'] = dict(token_data)["refresh_token"]
 
     #print("Redirecting to /gradio")
     return RedirectResponse(url='/gradio')
 
-async def process_data(gr_state, title_input, interval_start_input, interval_end_input, duration_input, meeting_description, participant_input):
-    print(" PARTICIPANT INPUT: " + str(participant_input))
+def convert_langchain_to_gradio(messages):
+    gradio_messages = []
+    for msg in messages:
+        if isinstance(msg, AIMessage):
+            gradio_messages.append(ChatMessage(role="assistant", content=msg.content))
+        elif isinstance(msg, HumanMessage):
+            gradio_messages.append(ChatMessage(role="user", content=msg.content))
+    return gradio_messages
 
-    participant_emails = participant_input.split()
-    email_dict = {email: (False, "2024-01-01 09:00:00") for email in participant_emails}
+def load_chat_from_id(gr_state):
+    id = str(gr_state["email"])
+    config = {"configurable": {"thread_id": id}}
+    #state = rag_graph.get_state(config=config)
+    return []#convert_langchain_to_gradio(state.values.get("messages", ""))
+
+def init_chatbot(gr_state, request: gr.Request):
+    email = request.session.get('user', {}).get('email')
+    gr_state["email"] = email
+    gr_state["access_token"] = request.session["access_token"]
+    gr_state["refresh_token"] = request.session["refresh_token"]
+
+    config = {"configurable": {"thread_id": email}}
+    #state = rag_graph.get_state(config=config)
+    #print("\n\nMESSAGE:\n " + str(state.values.get("messages", "")) + "\n\n")
+
+    return gr_state, f"## Welcome to CrawlAI, {email}!", []#load_chat_from_id(gr_state)
+
+async def ask_question(question, history: list, gr_state):
+    # get thread id
+    config = {"configurable": {"thread_id": gr_state["email"]}}
+
+    #history.append({"role": "human", "content": question})
+    history.append({"role": "user", "content": question})
+
+    #print("\n\nTHREAD ID: " + str(config))
+
+    '''
+    graph_start_time: str
+    last_email_check_time: str
+    meeting_slot_start: str
+    meeting_slot_end: str
+    participant_info: dict[str, tuple[bool, str]] # key: email value: (confirmed, last datetime sent)
+    meeting_duration_minutes: int
+    meeting_description: str
+    organizer_name: str
+    access_token: str
+    refresh_token: str
+    background_task_running: bool
+    '''
 
     s = {
-        "participant_emails": participant_emails,
-        "meeting_interval_start_date": interval_start_input,
-        "meeting_interval_end_date": interval_end_input,
-        "participant_info": email_dict,
-        "meeting_duration_minutes": duration_input,
-        "meeting_description": meeting_description,
+        "meeting_title": "Apple Pie Discussion",
+        "meeting_slot_start": "2024-11-23 8:00:00",
+        "meeting_slot_end": "2024-11-23 9:00:00",
+        "participant_info": {
+            #"alexander.g.anokhin@gmail.com": (False, "2024-11-17 20:00:00"),
+            "aanokhin@scu.edu": (False, "2024-11-17 20:00:00")
+            #"mliashch@scu.edu": (False, "2024-11-17 20:00:00")
+        },
+        "meeting_duration_minutes": 20,
+        "organizer_name": "bobby",
+        "organizer_email": gr_state["email"],
         "access_token": gr_state["access_token"],
         "refresh_token": gr_state["refresh_token"],
-        "organizer_email": gr_state["email"],
-        "organizer_name": gr_state["user_name"],
-        "meeting_title": title_input
+        "meeting_description": "In this meeting we will discuss apple pie."
     }
 
-    slots = get_availability_slots(s)
+    response = email_graph.invoke(s, config=config)
+    #response = email_graph.invoke({"messages": [HumanMessage(content=question)], "access_token": gr_state["access_token"], "refresh_token": gr_state["refresh_token"]}, config=config)
+    history.append({"role": "assistant", "content": "hi"})
 
-    # update gradio elements
-    yield ["", "", "", "", "", "", gr.Button("Submit", interactive=False), "Emails have been sent. If all participants accept, google calendar event will be created. Please monitor your inbox for live info."]
+    #history.append({"role": "assistant", "content": response["messages"][-1].content})
 
-    if slots:
-        best_slot = select_best_slot(duration_input, slots)
-        s["meeting_slot_start"] = best_slot
+    return "", history
 
-        time_obj = datetime.strptime(best_slot, format_string)
-        updated_time_obj = time_obj + timedelta(minutes=duration_input)
-        updated_time_string = updated_time_obj.strftime(format_string)
-        s["meeting_slot_end"] = updated_time_string
 
-        config = {"configurable": {"thread_id": gr_state["email"]}}
-        email_graph.invoke(s, config=config)
+# input: time slot, meeting info (participants, duration, description)
+# output: start the email async task
+#def start_emailing_graph():
 
 def dates_to_strings(dates):
     string_tuples = []
@@ -143,7 +185,7 @@ def get_availability_slots(s):
     meeting_interval_start_date = s["meeting_interval_start_date"]
     meeting_interval_end_date = s["meeting_interval_end_date"]
     participant_emails = s["participant_emails"]
-    meeting_duration_minutes = s["meeting_duration_minutes"]
+    meeting_duration_minutes = s["meeting_duration"]
 
     client_id = os.environ["GOOGLE_CLIENT_ID"]
     client_secret = os.environ["GOOGLE_CLIENT_SECRET"]
@@ -196,7 +238,6 @@ def select_best_slot(duration, slots):
         by a list of times showing intervals when meeting participants are all available, each of which is a tuple of datetime strings (one for start of interval, one for end).
         Out of these, please select 1 time slot {duration} minutes long that would be most convenient for a work meeting. Prefer a time
         slot that is not too late at night or too early in the morning, and avoid weekends if you can (for context it is 2024 right now).
-        Also if possible, prefer to output the slot starting at a round time (example on the hour or on the half-hour).
         Please output a just a string as your answer, it being the selected time slot start
         datetime (in the format {format_string}). Please remember that your selected time slot must fit
         into the provided ones, must be of duration {duration} minutes, and must be properly output in the format {format_string}.
@@ -205,25 +246,6 @@ def select_best_slot(duration, slots):
     '''
     response = time_selector_llm.invoke(selector_prompt)
     return response.content
-
-def init_chatbot(gr_state, request: gr.Request):
-    email = request.session.get('user', {}).get('email')
-    gr_state["user_name"] = request.session.get('user', {}).get('name')
-    gr_state["email"] = email
-    gr_state["access_token"] = request.session["access_token"]
-    gr_state["refresh_token"] = request.session["refresh_token"]
-
-    return gr_state, f"## Welcome to Calendar Agent, {email}!"
-
-def check_inputs(input1, input2, input3, input4, input5, input6):
-    if input1 and input2 and input3 and input4 and input5 and input6:  # Add conditions for all required inputs
-        return gr.Button("Submit", interactive=True)  # Enable button
-    else:
-        return gr.Button("Submit", interactive=False)  # Disable button
-
-# input: time slot, meeting info (participants, duration, description)
-# output: start the email async task
-#def start_emailing_graph():
 
 with gr.Blocks() as login_page:
     btn = gr.Button("Login")
@@ -237,7 +259,15 @@ with gr.Blocks() as login_page:
 
 app = gr.mount_gradio_app(app, login_page, path="/main")
 
-with gr.Blocks() as chatbot_page:
+# css to be able to dynamically scale gr.Chatbot vertically 
+main_chatbot_css = """
+#chatbot {
+    flex-grow: 1 !important;
+    overflow: auto !important;
+}
+"""
+
+with gr.Blocks(css=main_chatbot_css) as chatbot_page:
     gr_state = gr.State({})
     chat_history_box = None    
 
@@ -248,29 +278,37 @@ with gr.Blocks() as chatbot_page:
 
         with gr.Column(scale=2):
             gr.Button("Logout", link="/logout")
+
+    # chat history component
+    #chat_history_box = gr.Chatbot(
+    #    show_label=False, 
+    #    scale=1, 
+    #    elem_id="chatbot", 
+    #    bubble_full_width=False, 
+    #    type="messages")
+
+    # input component
+    #input_box = gr.MultimodalTextbox(
+    #    interactive=True,
+    #    show_label=False,
+    #    scale=0,
+    #    file_count="multiple",
+    #    placeholder="Enter message or upload file...")
     
-    title_input = gr.Textbox(label="Meeting Title:")
-    interval_start_input = gr.DateTime(label="Interval Start Date/Time:", type="string")
-    interval_end_input = gr.DateTime(label="Interval End Date/Time:", type="string")
-    duration_input=gr.Number(label="Meeting duration (minutes):")
-    meeting_description=gr.Textbox(label="Meeting description:")
-    participant_input=gr.Textbox(label="Participant emails (separated by spaces):")
+    chatbot = gr.Chatbot(type="messages", label="Chatbot")
+    msg = gr.Textbox(label="Ask your question")
+    msg.submit(ask_question, [msg, chatbot, gr_state], [msg, chatbot])
 
-    submit_button = gr.Button("Submit", interactive=False)
-
-    output_text = gr.Textbox(label="Output:", interactive=False)
-
-    interval_start_input.change(check_inputs, [title_input, interval_start_input, interval_end_input, duration_input, meeting_description, participant_input], submit_button)
-    interval_end_input.change(check_inputs, [title_input, interval_start_input, interval_end_input, duration_input, meeting_description, participant_input], submit_button)
-    duration_input.change(check_inputs, [title_input, interval_start_input, interval_end_input, duration_input, meeting_description, participant_input], submit_button)
-    meeting_description.change(check_inputs, [title_input, interval_start_input, interval_end_input, duration_input, meeting_description, participant_input], submit_button)
-    participant_input.change(check_inputs, [title_input, interval_start_input, interval_end_input, duration_input, meeting_description, participant_input], submit_button)
-    title_input.change(check_inputs, [title_input, interval_start_input, interval_end_input, duration_input, meeting_description, participant_input], submit_button)
-
-    submit_button.click(process_data, [gr_state, title_input, interval_start_input, interval_end_input, duration_input, meeting_description, participant_input], [title_input, interval_start_input, interval_end_input, duration_input, meeting_description, participant_input, submit_button, output_text])
+    # user inputs message
+    #user_message_step = input_box.submit(add_user_message, [chat_history_box, input_box], [chat_history_box, input_box])
+    # bot processes message (iterator, streaming)
+    #bot_message_step = user_message_step.then(bot_stream_graph, [chat_history_box, gr_state], chat_history_box, api_name="bot_response")
+    # clear the output field and make it interactive again
+    #bot_message_step.then(lambda: gr.MultimodalTextbox(interactive=True), None, [input_box])
 
     # attach function to run on first load
-    chatbot_page.load(init_chatbot, gr_state, [gr_state, welcome_text])
+    chatbot_page.load(init_chatbot, gr_state, [gr_state, welcome_text, chatbot])
+    chatbot_page.queue()
 
 app = gr.mount_gradio_app(app, chatbot_page, path="/gradio", auth_dependency=get_user)
 
