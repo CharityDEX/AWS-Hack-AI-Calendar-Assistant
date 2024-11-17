@@ -1,5 +1,3 @@
-import './temp.css'
-
 import React from 'react';
 import { useSelector } from 'react-redux';
 import ChoiceRender from './ChoiceRender';
@@ -13,7 +11,7 @@ const MeetingChoices = () => {
   };
 
   return (
-    <div className={optionsOpen ? 'open-options option-cards-container' : 'option-cards-container'}>
+    <div className='option-cards-container'>
       <div className="card-label">
         <h2>Select A Time</h2>
       </div>

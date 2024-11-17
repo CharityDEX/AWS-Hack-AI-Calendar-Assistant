@@ -7,13 +7,13 @@ import { useSelector } from 'react-redux';
 
 const Application = () => {
   const statusOpen = useSelector(state => state.loadStatus.load);
-  console.log("status", statusOpen);
+  const optionsOpen = useSelector((state) => state.options.isOpen);
 
   return (
     <div>
       <Header />
       <MeetingScheduler />
-      <MeetingChoices />
+      {optionsOpen ? <MeetingChoices /> : ''}
       {statusOpen ? <MeetingStatus /> : ''}
     </div>
   )
